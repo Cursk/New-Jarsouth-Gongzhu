@@ -1,0 +1,2128 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>🐷 新日尔南拱猪</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #1a472a;
+        font-family: "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+        color: #fff;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* ===== 屏幕 ===== */
+      .screen {
+        display: none;
+        width: 100vw;
+        height: 100vh;
+      }
+      .screen.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #gameScreen.active {
+        display: block;
+        position: relative;
+      }
+
+      /* ===== 等待室 ===== */
+      #waitScreen {
+        flex-direction: column;
+      }
+      .lobby-box {
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 20px;
+        padding: 44px 52px;
+        text-align: center;
+        min-width: 380px;
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .lobby-box h1 {
+        font-size: 2.8rem;
+        margin-bottom: 4px;
+      }
+      .lobby-box .sub {
+        color: #9de;
+        margin-bottom: 28px;
+        font-size: 0.95rem;
+      }
+      .lobby-box input {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 2px solid #4a9;
+        font-size: 1.05rem;
+        background: #162e1e;
+        color: #fff;
+        margin-bottom: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .lobby-box input:focus {
+        border-color: #7df;
+      }
+      .lobby-box input::placeholder {
+        color: #567;
+      }
+      .btn {
+        background: linear-gradient(135deg, #2e8b57, #3cb371);
+        color: #fff;
+        border: none;
+        padding: 13px 28px;
+        border-radius: 10px;
+        font-size: 1.05rem;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        transition: opacity 0.2s;
+      }
+      .btn:hover {
+        opacity: 0.85;
+      }
+      .btn:disabled {
+        background: #444;
+        cursor: default;
+        opacity: 1;
+      }
+      .player-slots {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 20px;
+        flex-wrap: wrap;
+      }
+      .slot {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 9px 18px;
+        font-size: 0.9rem;
+        min-width: 80px;
+        text-align: center;
+        border: 2px solid rgba(255, 255, 255, 0.15);
+      }
+      .slot.filled {
+        background: rgba(46, 139, 87, 0.35);
+        border-color: #4db;
+        color: #afe;
+      }
+      .wait-tip {
+        color: #9de;
+        margin-top: 14px;
+        font-size: 0.9rem;
+      }
+      .rules-card {
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 14px;
+        padding: 18px 24px;
+        margin-top: 20px;
+        text-align: left;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 0.85rem;
+      }
+      .rules-card h3 {
+        color: #ffd;
+        margin-bottom: 10px;
+        font-size: 0.95rem;
+      }
+      .rule-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 5px 0;
+      }
+      .rule-row .tag {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        padding: 2px 8px;
+        white-space: nowrap;
+        font-weight: bold;
+      }
+      .tag.bad {
+        color: #ff8888;
+      }
+      .tag.good {
+        color: #88ff88;
+      }
+      .tag.blue {
+        color: #88ccff;
+      }
+      .tag.gold {
+        color: #ffd700;
+      }
+
+      /* ===== 游戏桌面 ===== */
+      #gameScreen {
+        background: radial-gradient(
+          ellipse at center,
+          #2d6a3f 0%,
+          #1a472a 100%
+        );
+      }
+      #gameScreen::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+          45deg,
+          rgba(255, 255, 255, 0.012) 0,
+          rgba(255, 255, 255, 0.012) 1px,
+          transparent 1px,
+          transparent 10px
+        );
+      }
+
+      /* ===== 玩家区域 ===== */
+      .player-area {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .name-tag {
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 20px;
+        padding: 5px 16px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .name-tag.my-turn {
+        border-color: #ffd700;
+        color: #ffd700;
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+      }
+      .name-tag.offline {
+        border-color: #ff6666;
+        opacity: 0.6;
+      }
+      .name-tag .score-inline {
+        color: #aef;
+        margin-left: 6px;
+        font-size: 0.8rem;
+      }
+
+      /* 亮牌徽章行 */
+      .decl-badges {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        justify-content: center;
+        min-height: 18px;
+      }
+      .decl-badge {
+        font-size: 0.72rem;
+        font-weight: bold;
+        padding: 2px 7px;
+        border-radius: 10px;
+        white-space: nowrap;
+        letter-spacing: 0.02em;
+      }
+      .decl-badge.pig {
+        background: rgba(255, 60, 60, 0.3);
+        color: #ff8888;
+        border: 1px solid #ff6666;
+      }
+      .decl-badge.sheep {
+        background: rgba(60, 220, 60, 0.3);
+        color: #88ff88;
+        border: 1px solid #44dd44;
+      }
+      .decl-badge.transformer {
+        background: rgba(60, 160, 255, 0.3);
+        color: #88ccff;
+        border: 1px solid #44aaff;
+      }
+      .decl-badge.heartA {
+        background: rgba(255, 80, 120, 0.3);
+        color: #ffaacc;
+        border: 1px solid #ff4488;
+      }
+
+      #area-bottom {
+        bottom: 12px;
+        left: 0;
+        right: 0;
+        width: 100vw;
+        transform: none;
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: center;
+        gap: 4px;
+      }
+      #area-top {
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      #area-left {
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      #area-right {
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
+      /* ===== 手牌 ===== */
+      .opp-hand-h {
+        display: flex;
+      }
+      .opp-hand-h .card-back {
+        margin-left: -15px;
+      }
+      .opp-hand-h .card-back:first-child {
+        margin-left: 0;
+      }
+      .opp-hand-v {
+        display: flex;
+        flex-direction: column;
+      }
+      .opp-hand-v .card-back {
+        margin-top: -54px;
+      }
+      .opp-hand-v .card-back:first-child {
+        margin-top: 0;
+      }
+
+      #my-hand {
+        display: flex;
+        align-items: flex-end;
+        position: relative;
+        min-height: 110px;
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 16px;
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        width: calc(100vw - 180px);
+        max-width: 820px;
+        overflow-x: auto;
+        gap: 4px;
+        flex-wrap: nowrap;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+      }
+      #my-hand::-webkit-scrollbar {
+        height: 4px;
+      }
+      #my-hand::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.25);
+        border-radius: 4px;
+      }
+      #my-hand .card {
+        cursor: pointer;
+        flex-shrink: 0;
+        transition:
+          transform 0.15s,
+          box-shadow 0.15s;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #my-hand .card:hover {
+        transform: translateY(-18px);
+        z-index: 10;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+      }
+      #my-hand .card.locked {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+      #my-hand .card.locked:hover {
+        transform: none;
+        box-shadow: none;
+      }
+      #my-hand .card.touch-lift {
+        transform: translateY(-18px);
+        z-index: 20;
+      }
+
+      /* ===== 牌样式 ===== */
+      .card {
+        width: 56px;
+        height: 84px;
+        border-radius: 7px;
+        background: #fff;
+        border: 1px solid #ccc;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 3px 5px;
+        font-weight: bold;
+        user-select: none;
+        box-shadow: 1px 2px 6px rgba(0, 0, 0, 0.28);
+        position: relative;
+        flex-shrink: 0;
+      }
+      .card.red {
+        color: #cc2200;
+      }
+      .card.black {
+        color: #111;
+      }
+      .card .cv {
+        font-size: 0.8rem;
+        line-height: 1.1;
+      }
+      .card .cs {
+        font-size: 0.9rem;
+        line-height: 1;
+      }
+      .card .cv-bot {
+        transform: rotate(180deg);
+      }
+      .card .mid {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 1.2rem;
+        opacity: 0.2;
+      }
+      .card.sp-pig {
+        box-shadow:
+          0 0 0 2px #ff4444,
+          0 4px 16px rgba(255, 68, 68, 0.45);
+      }
+      .card.sp-sheep {
+        box-shadow:
+          0 0 0 2px #44dd44,
+          0 4px 16px rgba(68, 221, 68, 0.45);
+      }
+      .card.sp-trans {
+        box-shadow:
+          0 0 0 2px #44aaff,
+          0 4px 16px rgba(68, 170, 255, 0.45);
+      }
+      .card.sp-heart {
+        box-shadow: 0 0 0 1px #ff8888;
+      }
+      .card.sp-heart-big {
+        box-shadow:
+          0 0 0 2px #ff4444,
+          0 4px 12px rgba(255, 68, 68, 0.35);
+      }
+      /* 亮出的牌：加金色外发光 */
+      .card.declared {
+        box-shadow:
+          0 0 0 2px #ffd700,
+          0 0 14px rgba(255, 215, 0, 0.6) !important;
+      }
+
+      .card-back {
+        width: 56px;
+        height: 84px;
+        border-radius: 7px;
+        background: linear-gradient(
+          135deg,
+          #1a3a8a 25%,
+          #2255cc 50%,
+          #1a3a8a 75%
+        );
+        border: 2px solid #3355bb;
+        flex-shrink: 0;
+        box-shadow: 1px 2px 6px rgba(0, 0, 0, 0.32);
+        background-image: repeating-linear-gradient(
+          45deg,
+          rgba(255, 255, 255, 0.06) 0,
+          rgba(255, 255, 255, 0.06) 1px,
+          transparent 1px,
+          transparent 8px
+        );
+      }
+      .card-back.sm {
+        width: 42px;
+        height: 62px;
+      }
+
+      /* ===== 中央牌桌（十字布局）===== */
+      #center-table {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 260px;
+        height: 260px;
+        background: rgba(0, 0, 0, 0.22);
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        pointer-events: none;
+      }
+
+      .trick-slot {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 70px;
+        height: 98px;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 10px;
+      }
+
+      /* 十字布局：四张牌分布在上下左右，与玩家方位完全一致 */
+      #trick-top {
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      #trick-right {
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
+      #trick-bottom {
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      #trick-left {
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+
+      /* ===== 公开记录板 ===== */
+      #card-log {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.65);
+        border-radius: 14px;
+        padding: 10px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        font-size: 0.78rem;
+        min-width: 360px;
+        max-width: 70vw;
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .log-player {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        min-width: 70px;
+      }
+      .log-player-name {
+        color: #aef;
+        font-size: 0.72rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 70px;
+      }
+      .log-player-name.active {
+        color: #ffd700;
+      }
+      .log-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        justify-content: center;
+        min-height: 18px;
+      }
+      .log-card {
+        font-size: 0.7rem;
+        font-weight: bold;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.12);
+        white-space: nowrap;
+      }
+      .log-card.red {
+        color: #ff8888;
+      }
+      .log-card.black {
+        color: #ddd;
+      }
+      .log-card.pig {
+        color: #ff4444;
+        background: rgba(255, 68, 68, 0.2);
+      }
+      .log-card.sheep {
+        color: #44ff44;
+        background: rgba(68, 255, 68, 0.2);
+      }
+      .log-card.trans {
+        color: #44aaff;
+        background: rgba(68, 170, 255, 0.2);
+      }
+      .log-score {
+        font-size: 0.68rem;
+        color: #cccc88;
+      }
+
+      /* ===== 计分板 ===== */
+      #scoreboard {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 14px;
+        padding: 14px 18px;
+        min-width: 200px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        font-size: 0.85rem;
+      }
+      #scoreboard h3 {
+        color: #aef;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        padding-bottom: 6px;
+      }
+      .score-header {
+        display: flex;
+        justify-content: space-between;
+        color: #888;
+        font-size: 0.75rem;
+        margin-bottom: 3px;
+        padding: 0 2px;
+      }
+      .score-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 4px 0;
+        gap: 6px;
+      }
+      .score-row .sname {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 72px;
+      }
+      .score-row .offline-dot {
+        color: #ff6666;
+        font-size: 0.7rem;
+        margin-left: 2px;
+      }
+      .score-cols {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .score-val {
+        font-weight: bold;
+        min-width: 36px;
+        text-align: right;
+        font-size: 0.82rem;
+      }
+      .score-val.bad {
+        color: #ff8888;
+      }
+      .score-val.good {
+        color: #88ff88;
+      }
+      .score-val.zero {
+        color: #888;
+      }
+      .score-round {
+        font-size: 0.75rem;
+        min-width: 32px;
+        text-align: right;
+        color: #cccc88;
+      }
+      .escape-bar {
+        margin-top: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        height: 4px;
+      }
+      .escape-fill {
+        height: 4px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #2e8b57, #ffd700);
+        transition: width 0.5s;
+      }
+
+      /* ===== 规则速查 ===== */
+      #rules-hint {
+        position: absolute;
+        top: 12px;
+        left: 14px;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 14px;
+        padding: 12px 16px;
+        font-size: 0.78rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        line-height: 1.8;
+      }
+      #rules-hint h3 {
+        color: #ffd;
+        margin-bottom: 6px;
+        font-size: 0.82rem;
+      }
+      #rules-hint .r {
+        display: flex;
+        gap: 8px;
+      }
+      #rules-hint .rl {
+        color: #aaa;
+        width: 56px;
+      }
+      #rules-hint .rv {
+        color: #fff;
+      }
+      #rules-hint .rv.bad {
+        color: #ff8888;
+      }
+      #rules-hint .rv.good {
+        color: #88ff88;
+      }
+      #rules-hint .rv.blue {
+        color: #88ccff;
+      }
+      #rules-hint .rv.gold {
+        color: #ffd700;
+      }
+
+      /* ===== 消息条 ===== */
+      #msg-bar {
+        position: absolute;
+        bottom: 136px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.75);
+        border-radius: 20px;
+        padding: 8px 22px;
+        font-size: 0.9rem;
+        color: #ffe;
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      #msg-bar.show {
+        opacity: 1;
+      }
+
+      /* ===== 玩家小记分框 ===== */
+      .player-mini-log {
+        background: rgba(0, 0, 0, 0.55);
+        border-radius: 8px;
+        padding: 4px 8px;
+        font-size: 0.68rem;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 3px;
+        max-width: 160px;
+        justify-content: center;
+        min-height: 20px;
+        min-width: 60px;
+      }
+      .mini-log-card {
+        font-weight: bold;
+        padding: 1px 4px;
+        border-radius: 3px;
+        white-space: nowrap;
+      }
+      .mini-log-card.red {
+        color: #ff8888;
+      }
+      .mini-log-card.black {
+        color: #ddd;
+      }
+      .mini-log-card.pig {
+        color: #ff4444;
+        background: rgba(255, 68, 68, 0.25);
+      }
+      .mini-log-card.sheep {
+        color: #44ff44;
+        background: rgba(68, 255, 68, 0.25);
+      }
+      .mini-log-card.trans {
+        color: #44aaff;
+        background: rgba(68, 170, 255, 0.25);
+      }
+      #area-left .player-mini-log,
+      #area-right .player-mini-log {
+        max-width: 80px;
+      }
+
+      /* ===== 亮牌阶段弹窗 ===== */
+      #declareScreen {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        background: transparent; /* 不遮暗背景 */
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 12px;
+        pointer-events: none; /* 穿透到手牌，手牌可滑动 */
+      }
+      #declareScreen.show {
+        display: flex;
+      }
+      /* 只有弹窗盒子本身接收点击 */
+      #declareScreen .declare-box {
+        pointer-events: auto;
+      }
+      .declare-box {
+        background: #152a1e;
+        border-radius: 22px;
+        padding: 36px 40px;
+        min-width: 420px;
+        max-width: 94vw;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        text-align: center;
+      }
+      .declare-box h2 {
+        font-size: 1.5rem;
+        margin-bottom: 6px;
+      }
+      .declare-box .declare-tip {
+        color: #9de;
+        font-size: 0.88rem;
+        margin-bottom: 24px;
+        line-height: 1.5;
+      }
+
+      /* 四张可亮的牌 */
+      .declare-cards-row {
+        display: flex;
+        gap: 18px;
+        justify-content: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .declare-slot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: transform 0.15s;
+      }
+      .declare-slot:hover .card {
+        transform: translateY(-6px);
+      }
+      .declare-slot.no-card {
+        opacity: 0.3;
+        cursor: default;
+        pointer-events: none;
+      }
+      .declare-slot.selected .card {
+        box-shadow:
+          0 0 0 3px #ffd700,
+          0 0 22px rgba(255, 215, 0, 0.6) !important;
+        transform: translateY(-8px);
+      }
+      .declare-slot .decl-label {
+        font-size: 0.78rem;
+        color: #aaa;
+        text-align: center;
+        max-width: 68px;
+        line-height: 1.4;
+      }
+      .declare-slot.selected .decl-label {
+        color: #ffd700;
+        font-weight: bold;
+      }
+      .declare-slot .decl-effect {
+        font-size: 0.7rem;
+        color: #888;
+        text-align: center;
+        max-width: 68px;
+      }
+      .declare-slot.selected .decl-effect {
+        color: #aef;
+      }
+
+      /* 其他玩家状态 */
+      .declare-others {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .declare-player-chip {
+        padding: 4px 14px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.07);
+        color: #888;
+      }
+      .declare-player-chip.me {
+        color: #aef;
+        border-color: #4488ff;
+      }
+      .declare-player-chip.ready {
+        color: #88ff88;
+        border-color: #44dd44;
+        background: rgba(68, 221, 68, 0.1);
+      }
+      .declare-player-chip.waiting {
+        color: #ffcc44;
+        border-color: #cc9900;
+      }
+
+      .declare-confirm-btn {
+        background: linear-gradient(135deg, #2e8b57, #3cb371);
+        color: #fff;
+        border: none;
+        padding: 13px 36px;
+        border-radius: 12px;
+        font-size: 1.05rem;
+        cursor: pointer;
+        font-weight: bold;
+        letter-spacing: 0.05em;
+        transition: opacity 0.2s;
+        width: 100%;
+        margin-top: 4px;
+      }
+      .declare-confirm-btn:hover {
+        opacity: 0.85;
+      }
+      .declare-confirm-btn:disabled {
+        background: #555;
+        cursor: default;
+        opacity: 1;
+      }
+
+      /* ===== 响应式 ===== */
+      @media (max-width: 900px) {
+        #rules-hint,
+        #card-log {
+          display: none;
+        }
+        #scoreboard {
+          min-width: 130px;
+          font-size: 0.75rem;
+          padding: 10px 12px;
+        }
+        #center-table {
+          width: 220px;
+          height: 220px;
+        }
+        .trick-slot {
+          min-height: 72px;
+        }
+      }
+      @media (max-width: 600px) {
+        body,
+        .screen,
+        #gameScreen.active {
+          height: 100dvh;
+        }
+        .card {
+          width: 40px;
+          height: 60px;
+          border-radius: 5px;
+          padding: 2px 3px;
+        }
+        .card .cv {
+          font-size: 0.65rem;
+        }
+        .card .cs {
+          font-size: 0.75rem;
+        }
+        .card .mid {
+          font-size: 0.9rem;
+        }
+        .card-back {
+          width: 40px;
+          height: 60px;
+          border-radius: 5px;
+        }
+        .card-back.sm {
+          width: 28px;
+          height: 42px;
+        }
+        #area-bottom {
+          position: fixed !important;
+          bottom: 8px !important;
+          left: 0 !important;
+          right: 0 !important;
+          width: 100vw !important;
+          transform: none !important;
+          z-index: 30;
+          align-items: center;
+        }
+        #my-hand {
+          width: calc(100vw - 16px);
+          max-width: none;
+          min-height: 75px;
+          gap: 4px;
+          padding: 6px 10px;
+        }
+        #my-hand .card.touch-lift {
+          transform: translateY(-14px);
+        }
+        #rules-hint,
+        #card-log {
+          display: none;
+        }
+        #scoreboard {
+          min-width: 90px;
+          font-size: 0.65rem;
+          padding: 6px 8px;
+          top: 4px;
+          right: 4px;
+        }
+        #scoreboard h3 {
+          font-size: 0.68rem;
+          margin-bottom: 4px;
+        }
+        .score-header {
+          font-size: 0.6rem;
+        }
+        .score-val {
+          font-size: 0.7rem;
+        }
+        .score-round {
+          font-size: 0.6rem;
+        }
+        .escape-bar {
+          height: 3px;
+        }
+        #center-table {
+          width: 170px;
+          height: 170px;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -55%);
+        }
+        .trick-slot {
+          width: 44px;
+          height: 62px;
+          min-height: unset;
+        }
+        #trick-top {
+          top: 6px;
+        }
+        #trick-bottom {
+          bottom: 6px;
+        }
+        #trick-left {
+          left: 6px;
+        }
+        #trick-right {
+          right: 6px;
+        }
+        #area-left {
+          left: 2px;
+        }
+        #area-right {
+          right: 2px;
+        }
+        #area-top {
+          top: 4px;
+        }
+        #msg-bar {
+          bottom: 120px;
+          font-size: 0.78rem;
+          padding: 5px 12px;
+        }
+        .name-tag {
+          font-size: 0.7rem;
+          padding: 3px 8px;
+        }
+        .name-tag .score-inline {
+          font-size: 0.65rem;
+        }
+        .player-mini-log {
+          font-size: 0.62rem;
+          padding: 3px 5px;
+          max-width: 120px;
+        }
+        #area-left .player-mini-log,
+        #area-right .player-mini-log {
+          max-width: 64px;
+        }
+        .mini-log-card {
+          font-size: 0.6rem;
+          padding: 1px 3px;
+        }
+        .lobby-box {
+          min-width: unset;
+          width: 92vw;
+          padding: 28px 24px;
+        }
+        .lobby-box h1 {
+          font-size: 1.8rem;
+        }
+        .rules-card {
+          padding: 12px 14px;
+          font-size: 0.78rem;
+        }
+        .result-box {
+          min-width: unset;
+          width: 94vw;
+          padding: 20px 16px;
+        }
+        .result-table {
+          font-size: 0.75rem;
+        }
+        .result-table th,
+        .result-table td {
+          padding: 5px;
+        }
+        .declare-box {
+          min-width: unset;
+          padding: 24px 16px;
+        }
+        .declare-cards-row {
+          gap: 10px;
+        }
+      }
+
+      /* ===== 赢墩提示 ===== */
+      #trick-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: rgba(0, 0, 0, 0.45);
+        align-items: center;
+        justify-content: center;
+      }
+      #trick-overlay.show {
+        display: flex;
+      }
+      .trick-pop {
+        background: #1a3a2a;
+        border-radius: 16px;
+        padding: 22px 36px;
+        text-align: center;
+        font-size: 1.15rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      }
+
+      /* ===== 结算弹窗 ===== */
+      #roundEndScreen {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.8);
+        align-items: center;
+        justify-content: center;
+      }
+      #roundEndScreen.show {
+        display: flex;
+      }
+      .result-box {
+        background: #152a1e;
+        border-radius: 22px;
+        padding: 40px 44px;
+        min-width: 440px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .result-box h2 {
+        font-size: 1.7rem;
+        text-align: center;
+        margin-bottom: 22px;
+      }
+      .result-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 22px;
+        font-size: 0.9rem;
+      }
+      .result-table th {
+        color: #aef;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        font-weight: normal;
+      }
+      .result-table td {
+        padding: 10px 12px;
+        text-align: center;
+      }
+      .result-table tr:hover td {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .escaped-row td {
+        color: #ffd700 !important;
+        font-weight: bold;
+      }
+      .btn-row {
+        display: flex;
+        gap: 12px;
+      }
+      .btn-row .btn {
+        flex: 1;
+      }
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 13px 28px;
+        border-radius: 10px;
+        font-size: 1rem;
+        cursor: pointer;
+        flex: 1;
+        transition: background 0.2s;
+      }
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.22);
+      }
+      .grand-slam-banner {
+        background: linear-gradient(135deg, #7b3f00, #ffd700);
+        color: #000;
+        text-align: center;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 18px;
+        letter-spacing: 0.05em;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===== 等待室 ===== -->
+    <div id="waitScreen" class="screen active">
+      <div class="lobby-box">
+        <h1>🐷 新日尔南拱猪</h1>
+        <p class="sub">New Jarsouth Gongzhu</p>
+        <input
+          id="nameInput"
+          type="text"
+          placeholder="输入你的名字（最多8字）"
+          maxlength="8"
+        />
+        <button class="btn" id="joinBtn" onclick="joinGame()">加入游戏</button>
+        <div class="player-slots">
+          <div class="slot" id="s0">等待中…</div>
+          <div class="slot" id="s1">等待中…</div>
+          <div class="slot" id="s2">等待中…</div>
+          <div class="slot" id="s3">等待中…</div>
+        </div>
+        <div class="wait-tip" id="waitTip">
+          把游戏链接发给朋友，4人到齐后自动开始
+        </div>
+        <div class="rules-card">
+          <h3>📖 规则速览</h3>
+          <div class="rule-row">
+            <span class="tag bad">♠Q 猪</span><span>+100分（越少越好）</span>
+          </div>
+          <div class="rule-row">
+            <span class="tag good">♦J 羊</span><span>-100分（抢到有利）</span>
+          </div>
+          <div class="rule-row">
+            <span class="tag blue">♣10 变压器</span><span>本局得分翻倍</span>
+          </div>
+          <div class="rule-row">
+            <span class="tag bad">♥ 猪血</span
+            ><span>A=+50, K=+40, Q=+30, J=+20, 5~10=+10</span>
+          </div>
+          <div class="rule-row">
+            <span class="tag gold">全红</span
+            ><span>拿走全部红桃，获得-200分</span>
+          </div>
+          <div class="rule-row">
+            <span class="tag gold">大全</span
+            ><span>拿走所有特殊牌，直接获胜</span>
+          </div>
+          <div class="rule-row" style="margin-top: 6px">
+            🏆 <b>先达到1000分者出栏！</b>
+          </div>
+          <div class="rule-row" style="margin-top: 6px">
+            💫 <b>亮牌：每局开始前可亮出特殊牌，分数翻倍</b>
+          </div>
+          <div class="rule-row" style="margin-top: 6px">
+            🐴<b>浑元形意电气门出品(*╹▽╹*)</b>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 游戏主界面 ===== -->
+    <div id="gameScreen" class="screen">
+      <div id="rules-hint">
+        <h3>📖 规则速查</h3>
+        <div class="r">
+          <span class="rl">♠Q 猪</span><span class="rv bad">+100</span>
+        </div>
+        <div class="r">
+          <span class="rl">♦J 羊</span><span class="rv good">-100</span>
+        </div>
+        <div class="r">
+          <span class="rl">♣10 变压</span><span class="rv blue">翻倍</span>
+        </div>
+        <div class="r">
+          <span class="rl">♥A</span><span class="rv bad">+50</span>
+        </div>
+        <div class="r">
+          <span class="rl">♥K</span><span class="rv bad">+40</span>
+        </div>
+        <div class="r">
+          <span class="rl">♥Q</span><span class="rv bad">+30</span>
+        </div>
+        <div class="r">
+          <span class="rl">♥J</span><span class="rv bad">+20</span>
+        </div>
+        <div class="r">
+          <span class="rl">♥5~10</span><span class="rv bad">+10</span>
+        </div>
+        <div class="r">
+          <span class="rl">全红</span><span class="rv good">-200</span>
+        </div>
+        <div class="r">
+          <span class="rl">大全</span><span class="rv gold">直接赢！</span>
+        </div>
+      </div>
+
+      <div id="scoreboard">
+        <h3>📊 积分（满1000出栏）</h3>
+        <div id="scoreRows"></div>
+      </div>
+
+      <div class="player-area" id="area-top">
+        <div class="name-tag" id="name-top">-</div>
+        <div class="decl-badges" id="decl-top"></div>
+        <div class="player-mini-log" id="mini-log-top"></div>
+      </div>
+      <div class="player-area" id="area-left">
+        <div class="name-tag" id="name-left">-</div>
+        <div class="decl-badges" id="decl-left"></div>
+        <div class="player-mini-log" id="mini-log-left"></div>
+      </div>
+      <div class="player-area" id="area-right">
+        <div class="name-tag" id="name-right">-</div>
+        <div class="decl-badges" id="decl-right"></div>
+        <div class="player-mini-log" id="mini-log-right"></div>
+      </div>
+
+      <div id="card-log"></div>
+      <div id="center-table">
+        <div class="trick-slot" id="trick-top"></div>
+        <div class="trick-slot" id="trick-right"></div>
+        <div class="trick-slot" id="trick-left"></div>
+        <div class="trick-slot" id="trick-bottom"></div>
+      </div>
+
+      <div class="player-area" id="area-bottom">
+        <div class="opp-hand-h" id="my-hand"></div>
+        <div class="name-tag" id="name-bottom">我</div>
+        <div class="decl-badges" id="decl-bottom"></div>
+        <div class="player-mini-log" id="mini-log-bottom"></div>
+      </div>
+
+      <div id="msg-bar"></div>
+    </div>
+
+    <!-- ===== 亮牌阶段 ===== -->
+    <div id="declareScreen">
+      <div class="declare-box">
+        <h2>💫 亮牌阶段</h2>
+        <p class="declare-tip">
+          点击手中的特殊牌亮出，亮出后该牌本局分数翻倍<br />
+          <span style="color: #ffcc44; font-size: 0.82rem">
+            亮猪→+200 &nbsp;|&nbsp; 亮羊→-200 &nbsp;|&nbsp; 亮变压器→×4
+            &nbsp;|&nbsp; 亮♥A→所有猪血×2 </span
+          ><br />
+          <span style="color: #ff8888; font-size: 0.78rem">
+            ⚠️ 亮出的牌在该花色首次被打出时不可出（除非只剩这一张）
+          </span>
+        </p>
+
+        <!-- 四张可亮的牌 -->
+        <div class="declare-cards-row" id="declareCardsRow"></div>
+
+        <!-- 其他玩家确认状态 -->
+        <div class="declare-others" id="declareOthers"></div>
+
+        <button
+          class="declare-confirm-btn"
+          id="declareConfirmBtn"
+          onclick="confirmDeclaration()"
+        >
+          确认（不亮牌）
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== 赢墩提示 ===== -->
+    <div id="trick-overlay">
+      <div class="trick-pop" id="trick-pop-text"></div>
+    </div>
+
+    <!-- ===== 结算弹窗 ===== -->
+    <div id="roundEndScreen">
+      <div class="result-box">
+        <h2 id="roundTitle">🎴 本局结束</h2>
+        <div
+          id="grandSlamBanner"
+          style="display: none"
+          class="grand-slam-banner"
+        ></div>
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th style="text-align: left">玩家</th>
+              <th>亮牌</th>
+              <th>本局特殊牌</th>
+              <th>本局得分</th>
+              <th>累计总分</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+        <div class="btn-row">
+          <button class="btn" id="newGameBtn" onclick="doNewGame()">
+            再来一局
+          </button>
+          <button class="btn-secondary" onclick="doResetAll()">
+            重新开始（清零）
+          </button>
+        </div>
+        <div
+          id="voteStatus"
+          style="
+            text-align: center;
+            margin-top: 14px;
+            color: #aef;
+            font-size: 0.88rem;
+            min-height: 20px;
+          "
+        ></div>
+      </div>
+    </div>
+
+    <script>
+      // ===== 常量 =====
+      const SYM = { spades: "♠", hearts: "♥", diamonds: "♦", clubs: "♣" };
+      const VLB = (v) => (v <= 10 ? String(v) : ["J", "Q", "K", "A"][v - 11]);
+      const RED = (s) => s === "hearts" || s === "diamonds";
+
+      // 四种可亮的牌定义
+      const DECL_CARDS = [
+        {
+          type: "pig",
+          suit: "spades",
+          value: 12,
+          badge: "🐷×2",
+          label: "黑桃Q（猪）",
+          effect: "猪 +200分",
+          badgeClass: "pig",
+        },
+        {
+          type: "sheep",
+          suit: "diamonds",
+          value: 11,
+          badge: "🐑×2",
+          label: "方块J（羊）",
+          effect: "羊 -200分",
+          badgeClass: "sheep",
+        },
+        {
+          type: "transformer",
+          suit: "clubs",
+          value: 10,
+          badge: "⚡×4",
+          label: "梅花10（变压器）",
+          effect: "总分 ×4倍",
+          badgeClass: "transformer",
+        },
+        {
+          type: "heartA",
+          suit: "hearts",
+          value: 14,
+          badge: "♥A×2",
+          label: "红桃A",
+          effect: "所有猪血×2",
+          badgeClass: "heartA",
+        },
+      ];
+
+      // ===== 状态 =====
+      const socket = io();
+      let myIndex = -1;
+      let curState = null;
+      let msgTimer = null;
+      let myDeclaredTypes = new Set(); // 亮牌阶段本地选择
+      let hasSubmittedDecl = false; // 已提交亮牌
+      let trickPause = false; // 暂停渲染，等待展示完整墩
+
+      // ===== 工具 =====
+      function isPig(c) {
+        return c.suit === "spades" && c.value === 12;
+      }
+      function isSheep(c) {
+        return c.suit === "diamonds" && c.value === 11;
+      }
+      function isTrans(c) {
+        return c.suit === "clubs" && c.value === 10;
+      }
+      function getCardDeclType(c) {
+        if (c.suit === "spades" && c.value === 12) return "pig";
+        if (c.suit === "diamonds" && c.value === 11) return "sheep";
+        if (c.suit === "clubs" && c.value === 10) return "transformer";
+        if (c.suit === "hearts" && c.value === 14) return "heartA";
+        return null;
+      }
+      function heartVal(v) {
+        if (v === 14) return 50;
+        if (v === 13) return 40;
+        if (v === 12) return 30;
+        if (v === 11) return 20;
+        if (v >= 5) return 10;
+        return 0;
+      }
+      function cardSpecialTip(card) {
+        if (isPig(card)) return "🐷 猪 +100";
+        if (isSheep(card)) return "🐑 羊 -100";
+        if (isTrans(card)) return "⚡ 变压器";
+        if (card.suit === "hearts") {
+          const hv = heartVal(card.value);
+          return hv > 0 ? `🩸 猪血 +${hv}` : "";
+        }
+        return "";
+      }
+
+      function switchScreen(id) {
+        document
+          .querySelectorAll(".screen")
+          .forEach((s) => s.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      }
+      function showMsg(text, duration) {
+        const bar = document.getElementById("msg-bar");
+        bar.textContent = text;
+        bar.classList.add("show");
+        if (msgTimer) clearTimeout(msgTimer);
+        if (duration > 0)
+          msgTimer = setTimeout(() => bar.classList.remove("show"), duration);
+      }
+
+      // ===== 等待室 =====
+      function joinGame() {
+        const n = document.getElementById("nameInput").value.trim();
+        if (!n) {
+          showMsg("请先输入你的名字！", 2500);
+          return;
+        }
+        document.getElementById("joinBtn").disabled = true;
+        socket.emit("join", n);
+      }
+      document.getElementById("nameInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") joinGame();
+      });
+
+      socket.on("waiting", ({ players, count }) => {
+        for (let i = 0; i < 4; i++) {
+          const s = document.getElementById("s" + i);
+          if (players[i]) {
+            s.textContent = players[i];
+            s.classList.add("filled");
+          } else {
+            s.textContent = "等待中…";
+            s.classList.remove("filled");
+          }
+        }
+        document.getElementById("waitTip").textContent =
+          count < 4
+            ? `已有 ${count}/4 人就绪，等待更多玩家…`
+            : "4人到齐，游戏马上开始！";
+      });
+
+      // ===== 状态更新 =====
+      socket.on("stateUpdate", (state) => {
+        curState = state;
+        myIndex = state.myIndex;
+        if (state.phase === "declaring") {
+          // 以服务端记录为准：如果服务端显示我还没提交，则重置本地标志
+          const serverSaysSubmitted = !!(
+            state.players[state.myIndex] &&
+            state.players[state.myIndex].hasSubmitted
+          );
+          if (!serverSaysSubmitted) {
+            hasSubmittedDecl = false;
+            myDeclaredTypes = new Set();
+          }
+          // 先渲染游戏界面（让手牌在背景可见），再弹出亮牌覆层
+          switchScreen("gameScreen");
+          renderGame(state);
+          showDeclareScreen(state);
+        } else {
+          document.getElementById("declareScreen").classList.remove("show");
+          renderGame(state);
+        }
+      });
+
+      // ═══════════════════════════════════════
+      //  亮牌阶段
+      // ═══════════════════════════════════════
+      function showDeclareScreen(state) {
+        document.getElementById("declareScreen").classList.add("show");
+
+        // 如果自己已提交，只更新状态显示
+        if (hasSubmittedDecl) {
+          updateDeclareOthers(state);
+          return;
+        }
+        document.getElementById("declareConfirmBtn").disabled = false;
+        const myHand = state.myHand;
+
+        // 渲染四张可亮的牌
+        const row = document.getElementById("declareCardsRow");
+        row.innerHTML = "";
+        DECL_CARDS.forEach(
+          ({ type, suit, value, label, effect, badgeClass }) => {
+            const inHand = myHand.some(
+              (c) => c.suit === suit && c.value === value,
+            );
+            const slot = document.createElement("div");
+            slot.className = "declare-slot" + (inHand ? "" : " no-card");
+            slot.dataset.type = type;
+            if (myDeclaredTypes.has(type)) slot.classList.add("selected");
+
+            const cardEl = createCardEl({ suit, value }, false);
+            slot.appendChild(cardEl);
+
+            const lbl = document.createElement("div");
+            lbl.className = "decl-label";
+            lbl.textContent = label;
+            slot.appendChild(lbl);
+
+            const eff = document.createElement("div");
+            eff.className = "decl-effect";
+            eff.textContent = inHand ? effect : "（无此牌）";
+            slot.appendChild(eff);
+
+            if (inHand) {
+              slot.addEventListener("click", () => {
+                if (myDeclaredTypes.has(type)) myDeclaredTypes.delete(type);
+                else myDeclaredTypes.add(type);
+                slot.classList.toggle("selected");
+                updateDeclareConfirmBtn();
+              });
+            }
+            row.appendChild(slot);
+          },
+        );
+
+        updateDeclareConfirmBtn();
+        updateDeclareOthers(state);
+      }
+
+      function updateDeclareConfirmBtn() {
+        const btn = document.getElementById("declareConfirmBtn");
+        if (myDeclaredTypes.size === 0) {
+          btn.textContent = "确认（不亮牌）";
+        } else {
+          const labels = [...myDeclaredTypes].map(
+            (t) => DECL_CARDS.find((d) => d.type === t)?.badge || t,
+          );
+          btn.textContent = `确认亮出 ${labels.join(" ")}`;
+        }
+      }
+
+      function updateDeclareOthers(state) {
+        const others = document.getElementById("declareOthers");
+        others.innerHTML = "";
+        state.players.forEach((p, i) => {
+          const chip = document.createElement("div");
+          const isMe = i === state.myIndex;
+          chip.className =
+            "declare-player-chip" +
+            (isMe ? " me" : "") +
+            (p.hasSubmitted ? " ready" : " waiting");
+          chip.textContent = p.hasSubmitted ? `${p.name} ✓` : `${p.name} …`;
+          others.appendChild(chip);
+        });
+      }
+
+      function confirmDeclaration() {
+        if (hasSubmittedDecl) return;
+        hasSubmittedDecl = true;
+        const btn = document.getElementById("declareConfirmBtn");
+        btn.disabled = true;
+        btn.textContent = "已确认，等待其他玩家…";
+        socket.emit("submitDeclaration", [...myDeclaredTypes]);
+      }
+
+      // ═══════════════════════════════════════
+      //  游戏渲染
+      // ═══════════════════════════════════════
+      function renderGame(state) {
+        const mi = state.myIndex;
+        const pos = ["bottom", "right", "top", "left"];
+        const rel = [mi, (mi + 1) % 4, (mi + 2) % 4, (mi + 3) % 4];
+
+        pos.forEach((p, pi) => {
+          const idx = rel[pi];
+          const plyr = state.players[idx];
+          const isActive = idx === state.currentPlayer;
+
+          const nameEl = document.getElementById("name-" + p);
+          nameEl.innerHTML =
+            plyr.name +
+            `<span class="score-inline">${state.totalScores[idx]}分</span>`;
+          nameEl.className =
+            "name-tag" +
+            (isActive ? " my-turn" : "") +
+            (plyr.online === false ? " offline" : "");
+
+          renderDeclBadges(p, plyr.declared || []);
+          renderMiniLog(p, plyr);
+        });
+
+        renderMyHand(state);
+        renderTrick(state);
+        renderScoreboard(state);
+        renderCardLog(state);
+
+        if (state.currentPlayer === mi)
+          showMsg("✨ 轮到你出牌了，点击手牌出牌！", 0);
+        else
+          showMsg(
+            "等待 " + state.players[state.currentPlayer].name + " 出牌…",
+            0,
+          );
+      }
+
+      // 亮牌徽章
+      function renderDeclBadges(pos, declared) {
+        const el = document.getElementById("decl-" + pos);
+        if (!el) return;
+        el.innerHTML = "";
+        if (!declared || declared.length === 0) return;
+        declared.forEach((type) => {
+          const def = DECL_CARDS.find((d) => d.type === type);
+          if (!def) return;
+          const badge = document.createElement("span");
+          badge.className = "decl-badge " + def.badgeClass;
+          badge.textContent = def.badge;
+          badge.title = def.effect;
+          el.appendChild(badge);
+        });
+      }
+
+      // 玩家小记分框
+      function renderMiniLog(pos, plyr) {
+        const el = document.getElementById("mini-log-" + pos);
+        if (!el) return;
+        el.innerHTML = "";
+        const cards = [...(plyr.scoredCards || [])].sort(
+          (a, b) => a.value - b.value,
+        );
+        if (cards.length === 0) {
+          el.innerHTML =
+            '<span style="color:#555;font-size:.62rem">暂无得分牌</span>';
+          return;
+        }
+        cards.forEach((c) => {
+          const span = document.createElement("span");
+          span.textContent = VLB(c.value) + SYM[c.suit];
+          if (isPig(c)) span.className = "mini-log-card pig";
+          else if (isSheep(c)) span.className = "mini-log-card sheep";
+          else if (isTrans(c)) span.className = "mini-log-card trans";
+          else
+            span.className = "mini-log-card " + (RED(c.suit) ? "red" : "black");
+          el.appendChild(span);
+        });
+      }
+
+      function renderMyHand(state) {
+        const handEl = document.getElementById("my-hand");
+        handEl.innerHTML = "";
+        const isMyTurn = state.currentPlayer === state.myIndex;
+        const trick = state.currentTrick;
+        const leadSuit = trick.length > 0 ? trick[0].card.suit : null;
+        const hasSuit = leadSuit
+          ? state.myHand.some((c) => c.suit === leadSuit)
+          : false;
+
+        const countBadge = document.createElement("div");
+        countBadge.style.cssText =
+          "position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:rgba(255,200,0,.85);color:#000;font-size:.7rem;padding:1px 8px;border-radius:8px;white-space:nowrap;pointer-events:none;";
+        countBadge.textContent = `手牌 ${state.myHand.length} 张`;
+        handEl.appendChild(countBadge);
+
+        const myDecl = state.players[state.myIndex].declared || [];
+
+        state.myHand.forEach((card) => {
+          const playable =
+            isMyTurn && cardPlayable(state, card, leadSuit, hasSuit, myDecl);
+          const isDeclared = myDecl.includes(getCardDeclType(card));
+          const el = createCardEl(card, !playable && isMyTurn, isDeclared);
+          if (playable) {
+            let touchStartX = 0,
+              touchStartY = 0;
+            el.addEventListener(
+              "touchstart",
+              (e) => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                el.classList.add("touch-lift");
+              },
+              { passive: true },
+            );
+            el.addEventListener(
+              "touchend",
+              (e) => {
+                el.classList.remove("touch-lift");
+                const dx = e.changedTouches[0].clientX - touchStartX;
+                const dy = e.changedTouches[0].clientY - touchStartY;
+                // 移动超过8px视为滑动，不出牌
+                if (Math.sqrt(dx * dx + dy * dy) < 8) {
+                  e.preventDefault();
+                  playCard(card.suit, card.value);
+                }
+              },
+              { passive: false },
+            );
+            el.addEventListener(
+              "touchcancel",
+              () => el.classList.remove("touch-lift"),
+              { passive: true },
+            );
+            el.addEventListener("click", () => playCard(card.suit, card.value));
+          }
+          handEl.appendChild(el);
+        });
+      }
+
+      // 出牌合法性（镜像服务端逻辑）
+      function cardPlayable(state, card, leadSuit, hasSuit, myDecl) {
+        const trick = state.currentTrick;
+
+        if (trick.length === 0) {
+          if (state.roundNumber === 0 && state.trickNumber === 0)
+            return card.suit === "clubs" && card.value === 2;
+          // 亮牌限制：先手不可用亮牌开出该花色首墩
+          if (myDecl.length > 0) {
+            const dt = getCardDeclType(card);
+            if (
+              dt &&
+              myDecl.includes(dt) &&
+              !state.suitsEverLed.includes(card.suit)
+            ) {
+              const others = state.myHand.filter(
+                (c) => c.suit === card.suit && getCardDeclType(c) !== dt,
+              );
+              if (others.length > 0) return false;
+            }
+          }
+          return true;
+        }
+
+        if (hasSuit) {
+          if (card.suit !== leadSuit) return false;
+          // 亮牌限制：跟牌时该花色首次出现，不可出亮出的牌
+          if (myDecl.length > 0 && !state.suitsEverLed.includes(leadSuit)) {
+            const dt = getCardDeclType(card);
+            if (dt && myDecl.includes(dt)) {
+              const others = state.myHand.filter(
+                (c) => c.suit === leadSuit && getCardDeclType(c) !== dt,
+              );
+              if (others.length > 0) return false;
+            }
+          }
+          return true;
+        }
+        return true;
+      }
+
+      function renderTrick(state) {
+        if (trickPause) return; // 暂停期间不覆盖桌面牌
+        const mi = state.myIndex;
+        const slotMap = {
+          [mi]: "trick-bottom",
+          [(mi + 1) % 4]: "trick-right",
+          [(mi + 2) % 4]: "trick-top",
+          [(mi + 3) % 4]: "trick-left",
+        };
+        ["top", "right", "bottom", "left"].forEach(
+          (p) => (document.getElementById("trick-" + p).innerHTML = ""),
+        );
+        state.currentTrick.forEach(({ playerIndex, card }) => {
+          const slot = document.getElementById(slotMap[playerIndex]);
+          if (slot) slot.appendChild(createCardEl(card, false));
+        });
+      }
+
+      function renderScoreboard(state) {
+        const rows = document.getElementById("scoreRows");
+        rows.innerHTML = `<div class="score-header"><span>玩家</span><span style="display:flex;gap:8px"><span style="min-width:32px;text-align:right">本局</span><span style="min-width:36px;text-align:right">累计</span></span></div>`;
+        state.players.forEach((p, i) => {
+          const ts = state.totalScores[i];
+          const rs = state.roundScores ? state.roundScores[i] : 0;
+          const cls = ts > 0 ? "bad" : ts < 0 ? "good" : "zero";
+          const pct = Math.min(100, Math.max(0, (ts / 1000) * 100));
+          const offlineDot =
+            p.online === false ? '<span class="offline-dot">●断线</span>' : "";
+          const rsStr = rs !== 0 ? (rs > 0 ? `+${rs}` : `${rs}`) : "—";
+          rows.innerHTML += `
+            <div class="score-row">
+              <span class="sname">${p.name}${offlineDot}</span>
+              <span class="score-cols">
+                <span class="score-round">${rsStr}</span>
+                <span class="score-val ${cls}">${ts > 0 ? "+" : ""}${ts}</span>
+              </span>
+            </div>
+            <div class="escape-bar"><div class="escape-fill" style="width:${pct}%"></div></div>`;
+        });
+      }
+
+      function renderCardLog(state) {
+        const el = document.getElementById("card-log");
+        el.innerHTML = "";
+        state.players.forEach((p, i) => {
+          const isActive = i === state.currentPlayer;
+          const col = document.createElement("div");
+          col.className = "log-player";
+          const nameDiv = document.createElement("div");
+          nameDiv.className = "log-player-name" + (isActive ? " active" : "");
+          nameDiv.textContent = p.name;
+          col.appendChild(nameDiv);
+          const cardsDiv = document.createElement("div");
+          cardsDiv.className = "log-cards";
+          if (p.scoredCards && p.scoredCards.length > 0) {
+            [...p.scoredCards]
+              .sort((a, b) => a.value - b.value)
+              .forEach((c) => {
+                const span = document.createElement("span");
+                span.textContent = VLB(c.value) + SYM[c.suit];
+                if (isPig(c)) span.className = "log-card pig";
+                else if (isSheep(c)) span.className = "log-card sheep";
+                else if (isTrans(c)) span.className = "log-card trans";
+                else
+                  span.className =
+                    "log-card " + (RED(c.suit) ? "red" : "black");
+                cardsDiv.appendChild(span);
+              });
+          } else {
+            const empty = document.createElement("span");
+            empty.style.cssText = "color:#555;font-size:.65rem";
+            empty.textContent = "暂无";
+            cardsDiv.appendChild(empty);
+          }
+          col.appendChild(cardsDiv);
+          if (state.roundScores) {
+            const rs = state.roundScores[i];
+            const scoreDiv = document.createElement("div");
+            scoreDiv.className = "log-score";
+            scoreDiv.textContent =
+              rs !== 0 ? (rs > 0 ? `本局+${rs}` : `本局${rs}`) : "";
+            col.appendChild(scoreDiv);
+          }
+          el.appendChild(col);
+        });
+      }
+
+      // ===== 牌元素生成 =====
+      function createCardEl(card, locked, isDeclared) {
+        const el = document.createElement("div");
+        el.className = "card " + (RED(card.suit) ? "red" : "black");
+        if (locked) el.classList.add("locked");
+        if (isDeclared) el.classList.add("declared");
+        if (isPig(card)) el.classList.add("sp-pig");
+        if (isSheep(card)) el.classList.add("sp-sheep");
+        if (isTrans(card)) el.classList.add("sp-trans");
+        if (card.suit === "hearts") {
+          const hv = heartVal(card.value);
+          const hClass = hv >= 30 ? "sp-heart-big" : hv > 0 ? "sp-heart" : null;
+          if (hClass) el.classList.add(hClass);
+        }
+        const vl = VLB(card.value),
+          su = SYM[card.suit];
+        el.innerHTML = `
+          <div><div class="cv">${vl}</div><div class="cs">${su}</div></div>
+          <div class="mid">${su}</div>
+          <div><div class="cv cv-bot">${vl}</div><div class="cs cv-bot">${su}</div></div>`;
+        const tip = cardSpecialTip(card);
+        if (tip) el.title = tip;
+        return el;
+      }
+
+      // ===== 出牌 =====
+      function playCard(suit, value) {
+        if (!curState || curState.currentPlayer !== myIndex) return;
+        socket.emit("playCard", { suit, value });
+      }
+
+      // ===== Socket 事件 =====
+      socket.on("err", (msg) => showMsg("⚠️ " + msg, 3000));
+      socket.on("playerLeft", (msg) => showMsg("😢 " + msg, 5000));
+      socket.on("notice", (msg) => showMsg(msg, 6000));
+
+      socket.on("trickWon", ({ winnerName, trick }) => {
+        // 先把4张牌全部渲染到桌面，暂停让玩家看清
+        trickPause = true;
+        const mi = myIndex;
+        const slotMap = {
+          [mi]: "trick-bottom",
+          [(mi + 1) % 4]: "trick-right",
+          [(mi + 2) % 4]: "trick-top",
+          [(mi + 3) % 4]: "trick-left",
+        };
+        ["top", "right", "bottom", "left"].forEach(
+          (p) => (document.getElementById("trick-" + p).innerHTML = ""),
+        );
+        trick.forEach(({ playerIndex, card }) => {
+          const slot = document.getElementById(slotMap[playerIndex]);
+          if (slot) slot.appendChild(createCardEl(card, false));
+        });
+
+        // 800ms 后弹出赢墩提示
+        setTimeout(() => {
+          const sp = trick.map((t) => cardSpecialTip(t.card)).filter(Boolean);
+          const pop = document.getElementById("trick-pop-text");
+          pop.innerHTML = `<b>${winnerName}</b> 赢得这轮${sp.length ? '！<br><span style="font-size:.9rem;color:#ffd">' + sp.join("  ") + "</span>" : ""}`;
+          const ol = document.getElementById("trick-overlay");
+          ol.classList.add("show");
+          // 再过1500ms 关闭提示，解除暂停，刷新桌面
+          setTimeout(() => {
+            ol.classList.remove("show");
+            trickPause = false;
+            if (curState) renderTrick(curState);
+          }, 1500);
+        }, 800);
+      });
+
+      socket.on(
+        "roundEnd",
+        ({
+          roundScores,
+          totalScores,
+          playerNames,
+          escaped,
+          grandSlamWinner,
+          capturedSpecials,
+          playerDeclarations,
+          bigGameOver,
+        }) => {
+          const tbody = document.getElementById("resultBody");
+          tbody.innerHTML = "";
+
+          const banner = document.getElementById("grandSlamBanner");
+          if (grandSlamWinner) {
+            const extra = bigGameOver
+              ? "，本大局结束，其余三人出栏！下一大局积分清零重开。"
+              : "，其余玩家各+200！";
+            banner.textContent = `👑 大全！${grandSlamWinner} 拿走了所有特殊牌${extra}`;
+            banner.style.display = "block";
+          } else banner.style.display = "none";
+
+          playerNames.forEach((name, i) => {
+            const sp = capturedSpecials[i];
+            const decls = (playerDeclarations || [])[i] || [];
+            const declStr =
+              decls
+                .map((t) => DECL_CARDS.find((d) => d.type === t)?.badge || t)
+                .join(" ") || "—";
+            const badges =
+              [
+                sp.grandSlam ? "👑大全" : "",
+                sp.allHearts && !sp.grandSlam ? "🎴全红" : "",
+                sp.hasPig ? "🐷猪" : "",
+                sp.hasSheep ? "🐑羊" : "",
+                sp.hasTransformer ? "⚡变压器" : "",
+                !sp.allHearts && !sp.grandSlam && sp.heartScore > 0
+                  ? `🩸+${sp.heartScore}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ") || "—";
+
+            const rs = roundScores[i],
+              ts = totalScores[i];
+            const isEscaped = escaped.some((e) => e.name === name);
+            const row = document.createElement("tr");
+            if (isEscaped) row.classList.add("escaped-row");
+            row.innerHTML = `
+            <td style="text-align:left">${name}${isEscaped ? " 🎉出栏！" : ""}</td>
+            <td style="font-size:.82rem">${declStr}</td>
+            <td style="font-size:.82rem">${badges}</td>
+            <td style="color:${rs > 0 ? "#ff8888" : rs < 0 ? "#88ff88" : "#888"}">${rs > 0 ? "+" : ""}${rs}</td>
+            <td style="color:${ts >= 1000 ? "#ffd700" : ts > 0 ? "#ffaaaa" : "#aaffaa"}">${ts}</td>`;
+            tbody.appendChild(row);
+          });
+
+          const hasEscape = escaped.length > 0;
+          if (bigGameOver && grandSlamWinner) {
+            document.getElementById("roundTitle").textContent =
+              `🏆 大局结束！${grandSlamWinner} 大全获胜！`;
+          } else if (hasEscape) {
+            document.getElementById("roundTitle").textContent =
+              `🎉 ${escaped.map((e) => e.name).join("、")} 出栏！大局结束！`;
+          } else {
+            document.getElementById("roundTitle").textContent = "🎴 本局结束";
+          }
+
+          // 重置投票按钮
+          const btn = document.getElementById("newGameBtn");
+          btn.disabled = false;
+          btn.textContent = bigGameOver ? "开始新大局" : "再来一局";
+          document.getElementById("voteStatus").textContent = "";
+
+          document.getElementById("roundEndScreen").classList.add("show");
+        },
+      );
+
+      socket.on("newGameVote", ({ count, total, voterNames }) => {
+        const status = document.getElementById("voteStatus");
+        if (status)
+          status.textContent = `${count}/${total} 人准备好了（${voterNames.join("、")}）`;
+        const btn = document.getElementById("newGameBtn");
+        if (btn && !btn.disabled)
+          btn.textContent = `再来一局（${count}/${total}）`;
+      });
+
+      function doNewGame() {
+        const btn = document.getElementById("newGameBtn");
+        btn.disabled = true;
+        btn.textContent = "已准备，等待其他人…";
+        document.getElementById("voteStatus").textContent = "";
+        socket.emit("newGame");
+      }
+      function doResetAll() {
+        if (!confirm("确定要清空所有积分，重新开始吗？")) return;
+        document.getElementById("roundEndScreen").classList.remove("show");
+        socket.emit("resetAll");
+      }
+
+      // 每次进入新的亮牌阶段时重置本地状态
+      socket.on("gameStarted", () => {
+        document.getElementById("roundEndScreen").classList.remove("show");
+        myDeclaredTypes = new Set();
+        hasSubmittedDecl = false; // ✅ 确保这里重置为 false
+        switchScreen("gameScreen");
+        if (curState) {
+          if (curState.phase === "declaring") showDeclareScreen(curState);
+          else renderGame(curState);
+        }
+      });
+    </script>
+  </body>
+</html>
